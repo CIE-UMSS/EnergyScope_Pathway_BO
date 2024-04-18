@@ -7,7 +7,7 @@ You may cite it as follows:
 - [4], for reference to the current code 	
 
 You are welcome to report any bugs related to the code to the following:    
- moret.stefano@gmail.com or gauthierLimpens@gmail.com  
+pabloadolfo24@gmail.com  
  
 # Content #
 This folder contains the third release (v2_1, hourly LP) of the EnergyScope model adapted to the Belgian case.  
