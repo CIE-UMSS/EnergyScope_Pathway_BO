@@ -1,4 +1,4 @@
-# Acknowledging authorship #
+# EnergyScope Pathway-BO #
 In the academic spirit of collaboration, the source code should be appropriately acknowledged in the resulting scientific disseminations.  
 You may cite it as follows: 
 - [1], for general reference to the EnergyScope project and the EnergyScope modeling framework  	
