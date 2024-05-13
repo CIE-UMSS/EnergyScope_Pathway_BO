@@ -56,7 +56,7 @@ else:
 
 dat_path += [os.path.join(pth_model,'PES_data_all_years.dat'),
              os.path.join(pth_model,'PES_seq_opti.dat'),
-             os.path.join(pth_model,'PES_data_year_related_NZE.dat'),
+             os.path.join(pth_model,'PES_data_year_related_BAU.dat'),
              os.path.join(pth_model,'PES_data_efficiencies.dat'),
              os.path.join(pth_model,'PES_data_set_AGE_2021.dat')]
 dat_path_0 = dat_path + [os.path.join(pth_model,'PES_data_remaining.dat'),
@@ -127,14 +127,14 @@ if __name__ == '__main__':
                 
                 ampl = AmplObject(mod_1_path, mod_2_path, dat_path, ampl_options, type_model = type_of_model)
                 
-                ampl.set_params('gwp_limit',{('YEAR_2015'):800000}) # 150000
-                ampl.set_params('gwp_limit',{('YEAR_2021'):800000}) # 150000
-                ampl.set_params('gwp_limit',{('YEAR_2025'):20595})  # 95486
-                ampl.set_params('gwp_limit',{('YEAR_2030'):16676})  # 71615
-                ampl.set_params('gwp_limit',{('YEAR_2035'):12756})  # 47743
-                ampl.set_params('gwp_limit',{('YEAR_2040'):8837})  # 32329
-                ampl.set_params('gwp_limit',{('YEAR_2045'):4918})  # 16915
-                ampl.set_params('gwp_limit',{('YEAR_2050'):167})   # 1500
+                # ampl.set_params('gwp_limit',{('YEAR_2015'):800000}) # 150000
+                # ampl.set_params('gwp_limit',{('YEAR_2021'):800000}) # 150000
+                # ampl.set_params('gwp_limit',{('YEAR_2025'):20595})  # 95486
+                # ampl.set_params('gwp_limit',{('YEAR_2030'):16676})  # 71615
+                # ampl.set_params('gwp_limit',{('YEAR_2035'):12756})  # 47743
+                # ampl.set_params('gwp_limit',{('YEAR_2040'):8837})  # 32329
+                # ampl.set_params('gwp_limit',{('YEAR_2045'):4918})  # 16915
+                # ampl.set_params('gwp_limit',{('YEAR_2050'):167})   # 1500
 
                 # ampl.set_params('gwp_limit',{('YEAR_2015'):800000}) # 150000
                 # ampl.set_params('gwp_limit',{('YEAR_2021'):800000}) # 150000
@@ -154,14 +154,14 @@ if __name__ == '__main__':
                 # ampl.set_params('gwp_limit',{('YEAR_2045'):21207})  # 16915
                 # ampl.set_params('gwp_limit',{('YEAR_2050'):20500})   # 1500
 
-                # ampl.set_params('gwp_limit',{('YEAR_2015'):800000}) # 150000
-                # ampl.set_params('gwp_limit',{('YEAR_2021'):800000}) # 150000
-                # ampl.set_params('gwp_limit',{('YEAR_2025'):800000})  # 95486
-                # ampl.set_params('gwp_limit',{('YEAR_2030'):800000})  # 71615
-                # ampl.set_params('gwp_limit',{('YEAR_2035'):800000})  # 47743
-                # ampl.set_params('gwp_limit',{('YEAR_2040'):800000})  # 32329
-                # ampl.set_params('gwp_limit',{('YEAR_2045'):800000})  # 16915
-                # ampl.set_params('gwp_limit',{('YEAR_2050'):800000})   # 1500
+                ampl.set_params('gwp_limit',{('YEAR_2015'):800000}) # 150000
+                ampl.set_params('gwp_limit',{('YEAR_2021'):800000}) # 150000
+                ampl.set_params('gwp_limit',{('YEAR_2025'):800000})  # 95486
+                ampl.set_params('gwp_limit',{('YEAR_2030'):800000})  # 71615
+                ampl.set_params('gwp_limit',{('YEAR_2035'):800000})  # 47743
+                ampl.set_params('gwp_limit',{('YEAR_2040'):800000})  # 32329
+                ampl.set_params('gwp_limit',{('YEAR_2045'):800000})  # 16915
+                ampl.set_params('gwp_limit',{('YEAR_2050'):800000})   # 1500
 
                 # valor_gwp_limit_transition = 800000
                 # ampl.set_params('gwp_limit_transition', valor_gwp_limit_transition)
