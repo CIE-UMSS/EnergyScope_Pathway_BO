@@ -86,6 +86,8 @@ set ANT_INSTALL_PERIODS; # Anterior phases to the optimization window
 set ANT_TECHNOLOGIES; # Technologies in the anterior phases to the optimization window
 
 
+## NEW SET FOR RESERVE MARGIN
+set RESERVE_MARGIN_TECH := {"NUCLEAR", "CCGT", "CCGT_AMMONIA", "COAL_US", "COAL_IGCC", "HYDRO_DAM", "GEOTHERMAL", "OCGT", "GENSET_DIESEL", "ST_BIOMASS", "ST_SNG", "FUEL_CELL", "FB_ST_BIOMASS", "CFB_ST_BIOMASS", "BFB_ST_BIOMASS"};
 
 #################################
 ### PARAMETERS [Tables 1-2]   ###
@@ -101,6 +103,13 @@ param remaining_years {TECHNOLOGIES,PHASE} >=0;
 param limit_LT_renovation >= 0;
 param limit_pass_mob_changes >= 0;
 param limit_freight_changes >= 0;
+param limit_HT_renovation >= 0;
+param limit_cooking_changes >= 0;
+param limit_mech_comm_changes >= 0;
+param limit_mech_mov_agr_changes >= 0;
+param limit_mech_fix_agr_changes >= 0;
+param limit_mech_min_changes >= 0;
+param limit_mech_fish_changes >= 0;
 param efficiency {YEARS} >=0 default 1;
 
 ## Parameters added to include time series in the model [Table 1]
@@ -184,6 +193,8 @@ param ant_technology_lifespan {ANT_TECHNOLOGIES, ANT_INSTALL_PERIODS} default 25
 param phase_to_year {PHASE};
 
 
+## NEW PARAMETER FOR RESERVE MARGIN
+param reserve_margin {y in YEARS} >= 0 := if y == "YEAR_2015" or y == "YEAR_2021" then 0.00 else 0.18;
 
 #################################
 ###  VARIABLES [Tables 3-4]   ###
@@ -244,6 +255,8 @@ var Storage_level {YEARS, STORAGE_TECH, PERIODS} >= 0; # Sto_level [GWh]: Energy
 var F_ant_old {PHASE, TECHNOLOGIES}>=0, default 0; #[GW] Retired capacity during an anterior phase to the optimization window
 var Total_F_ant_old {TECHNOLOGIES} >= 0, default 0;#[GW] Total retired capacity for a given technology during anterior phases to the optimization window
 
+## NEW VARIABLE FOR RESERVE MARGIN CALCULATION
+var Peak_demand_electricity {YEARS_WND diff YEAR_ONE} >= 0, default 0;
 
 
 #########################################
@@ -259,7 +272,7 @@ var Total_F_ant_old {TECHNOLOGIES} >= 0, default 0;#[GW] Total retired capacity 
 subject to end_uses_t {y in YEARS_WND diff YEAR_ONE, l in LAYERS, h in HOURS, td in TYPICAL_DAYS}:
 	End_uses [y,l, h, td] = (if l == "ELECTRICITY" 
 		then
-			(end_uses_input[y,l] / total_time) + Network_losses [y,l,h,td]
+			(end_uses_input[y,l] * electricity_time_series [h, td] / t_op [h, td]) + Network_losses [y,l,h,td]
 		else (if l == "LIGHTING_R_C" then
 			(end_uses_input[y,"LIGHTING_R_C"] * electricity_time_series [h, td] / t_op [h, td])
 		else (if l == "LIGHTING_P" then
@@ -339,7 +352,9 @@ subject to op_cost_calc {y in YEARS_UP_TO union YEARS_WND, i in RESOURCES}:
 
 # [Eq. 6]
 subject to totalGWP_calc {y in YEARS_UP_TO union YEARS_WND}:
-	TotalGWP [y] =  sum {i in RESOURCES} GWP_op [y,i];
+	#TotalGWP [y] =  sum {i in RESOURCES} GWP_op [y,i];
+	#TotalGWP[y] = sum {i in RESOURCES: i != "CO2_CAPTURED"} GWP_op[y,i] - GWP_op[y,"CO2_CAPTURED"];
+	TotalGWP[y] = sum {i in RESOURCES} GWP_op[y,i] - sum {j in TECHNOLOGIES diff STORAGE_TECH: layers_in_out[y,j,"CO2_CAPTURED"] > 0} (-layers_in_out[y,j,"CO2_ATM"] * sum {t in PERIODS, h in HOUR_OF_PERIOD[t], td in TYPICAL_DAY_OF_PERIOD[t]} (F_t[y,j,h,td] * t_op[h,td]));
 	#JUST RESOURCES : TotalGWP [y] =  sum {i in RESOURCES} GWP_op [y,i];
 	#BASED ON LCA:    TotalGWP [y] = sum {j in TECHNOLOGIES} (GWP_constr [y,j] / lifetime [y,j]) + sum {i in RESOURCES} GWP_op [y,i];
 	
@@ -425,7 +440,7 @@ subject to storage_layer_out {y in YEARS_WND diff YEAR_ONE, j in STORAGE_TECH, l
 	(if storage_eff_out [y, j, l]=0 then  Storage_out [y, j, l, h, td]  = 0);
 		
 # [Eq. 19] limit the Energy to power ratio. 
-subject to limit_energy_to_power_ratio {y in YEARS_WND diff YEAR_ONE, j in STORAGE_TECH diff {"BEV_BATT","PHEV_BATT"}, l in LAYERS, h in HOURS, td in TYPICAL_DAYS}:
+subject to limit_energy_to_power_ratio {y in YEARS_WND diff YEAR_ONE, j in STORAGE_TECH diff {"BEV_BATT","PHEV_BATT","SUV_ELEC_PRIVATE_BATT","MOTORCYCLE_ELEC_PRIVATE_BATT","BUS_ELEC_PUBLIC_BATT"}, l in LAYERS, h in HOURS, td in TYPICAL_DAYS}:
 	Storage_in [y, j, l, h, td] * storage_charge_time[y, j] + Storage_out [y, j, l, h, td] * storage_discharge_time[y, j] <=  F [y, j] * storage_availability[y, j];
 
 # [Eq. 19] limit the Energy to power ratio. 
@@ -611,21 +626,76 @@ subject to limit_changes_freight {p in PHASE_WND union PHASE_UP_TO, y_start in P
 	sum {euc in END_USES_TYPES_OF_CATEGORY["MOBILITY_FREIGHT"], j in TECHNOLOGIES_OF_END_USES_TYPE[euc]} Delta_change[p,j] 
 		<= limit_freight_changes * (end_uses_input[y_start,"MOBILITY_FREIGHT"]);
 
+# [Eq. XX] Limit the amount of change for high temperature heating
+subject to limit_changes_high_heat {p in PHASE_WND union PHASE_UP_TO, y_start in PHASE_START[p], y_stop in PHASE_STOP[p]} :
+	sum {euc in END_USES_TYPES_OF_CATEGORY["HEAT_HIGH_T"], j in TECHNOLOGIES_OF_END_USES_TYPE[euc]} Delta_change[p,j] 
+		<= limit_HT_renovation * (end_uses_input[y_start,"HEAT_HIGH_T"]);
+# [Eq. XX] Limit the amount of change for cooking
+subject to limit_changes_cooking {p in PHASE_WND union PHASE_UP_TO, y_start in PHASE_START[p], y_stop in PHASE_STOP[p]} :
+	sum {euc in END_USES_TYPES_OF_CATEGORY["COOKING"], j in TECHNOLOGIES_OF_END_USES_TYPE[euc]} Delta_change[p,j] 
+		<= limit_cooking_changes * (end_uses_input[y_start,"COOKING"]);
+# [Eq. XX] Limit the amount of change for mech_comm
+subject to limit_changes_mech_comm {p in PHASE_WND union PHASE_UP_TO, y_start in PHASE_START[p], y_stop in PHASE_STOP[p]} :
+	sum {euc in END_USES_TYPES_OF_CATEGORY["MECHANICAL_ENERGY_COMM"], j in TECHNOLOGIES_OF_END_USES_TYPE[euc]} Delta_change[p,j] 
+		<= limit_mech_comm_changes * (end_uses_input[y_start,"MECHANICAL_ENERGY_COMM"]);
+# [Eq. XX] Limit the amount of change for mech_mov_agr
+subject to limit_changes_mech_mov_agr {p in PHASE_WND union PHASE_UP_TO, y_start in PHASE_START[p], y_stop in PHASE_STOP[p]} :
+	sum {euc in END_USES_TYPES_OF_CATEGORY["MECHANICAL_ENERGY_MOV_AGR"], j in TECHNOLOGIES_OF_END_USES_TYPE[euc]} Delta_change[p,j] 
+		<= limit_mech_mov_agr_changes * (end_uses_input[y_start,"MECHANICAL_ENERGY_MOV_AGR"]);
+# [Eq. XX] Limit the amount of change for mech_fix_agr
+subject to limit_changes_mech_fix_agr {p in PHASE_WND union PHASE_UP_TO, y_start in PHASE_START[p], y_stop in PHASE_STOP[p]} :
+	sum {euc in END_USES_TYPES_OF_CATEGORY["MECHANICAL_ENERGY_FIX_AGR"], j in TECHNOLOGIES_OF_END_USES_TYPE[euc]} Delta_change[p,j] 
+		<= limit_mech_fix_agr_changes * (end_uses_input[y_start,"MECHANICAL_ENERGY_FIX_AGR"]);
+# [Eq. XX] Limit the amount of change for mech_min
+subject to limit_changes_mech_min {p in PHASE_WND union PHASE_UP_TO, y_start in PHASE_START[p], y_stop in PHASE_STOP[p]} :
+	sum {euc in END_USES_TYPES_OF_CATEGORY["MECHANICAL_ENERGY_MIN"], j in TECHNOLOGIES_OF_END_USES_TYPE[euc]} Delta_change[p,j] 
+		<= limit_mech_min_changes * (end_uses_input[y_start,"MECHANICAL_ENERGY_MIN"]);
+# [Eq. XX] Limit the amount of change for mech_fish
+subject to limit_changes_mech_fish {p in PHASE_WND union PHASE_UP_TO, y_start in PHASE_START[p], y_stop in PHASE_STOP[p]} :
+	sum {euc in END_USES_TYPES_OF_CATEGORY["MECHANICAL_ENERGY_FISH_OTHERS"], j in TECHNOLOGIES_OF_END_USES_TYPE[euc]} Delta_change[p,j] 
+		<= limit_mech_fish_changes * (end_uses_input[y_start,"MECHANICAL_ENERGY_FISH_OTHERS"]);
 
 
 ## NEW EQUATIONS FOR ANTERIOR PHASES TO THE OPTIMIZATION WINDOW
 
 # [Eq. XX] Determine the capacity for a given technology and anterior phase to the optimization window
 subject to Calculate_F_ant_old_based_on_lifespan {p in PHASE, t in ANT_TECHNOLOGIES}:
-	F_ant_old[p, t] = sum{inst in ANT_INSTALL_PERIODS: (phase_to_year[p] >= (ant_install_year[inst] + ant_technology_lifespan[t, inst])) and (phase_to_year[p] < (ant_install_year[inst] + ant_technology_lifespan[t, inst] + t_phase [p]))} ant_install_capacity[t, inst];
+	F_ant_old[p, t] = sum{inst in ANT_INSTALL_PERIODS: (phase_to_year[p] > (ant_install_year[inst] + ant_technology_lifespan[t, inst])) and (phase_to_year[p] <= (ant_install_year[inst] + ant_technology_lifespan[t, inst] + t_phase [p]))} ant_install_capacity[t, inst];
 # [Eq. XX] Determine the total capacity of the anterior phases to the optimization window
 subject to Calculate_Total_F_ant_old {t in ANT_TECHNOLOGIES}:
-	Total_F_ant_old[t] = sum {p in PHASE} F_ant_old[p, t];
+	Total_F_ant_old[t] = sum {inst in ANT_INSTALL_PERIODS} ant_install_capacity[t, inst];
+#Force zero for technologies that are not part of ANT_TECHNOLOGIES
+subject to Force_F_ant_old_to_Zero {p in PHASE, i in TECHNOLOGIES diff ANT_TECHNOLOGIES}:
+  F_ant_old[p, i] = 0;
+subject to Force_Total_F_ant_old_to_Zero {i in TECHNOLOGIES diff ANT_TECHNOLOGIES}:
+  Total_F_ant_old[i] = 0;
+
 # [Eq. XX] Impose the exact capacity that reaches its lifetime
 # --> Check p2 HERE --> OK : p2 in PHASE
 subject to phase_out_assignment {i in TECHNOLOGIES, p in PHASE_WND, age in AGE[i,p]}:
 	F_old[p,i] = F_ant_old[p, i] + (if age == "STILL_IN_USE" then 0
 		else (F_new[age,i] - sum {p2 in PHASE_WND union PHASE_UP_TO} F_decom[p2,age,i] - (if age == "2015_2021" then Total_F_ant_old[i] else 0)));
+
+# NEW CONSTRAINT: RESERVE MARGIN
+# [Eq. XX] Reserve margin requirement for electricity generation
+#subject to electricity_reserve_margin_peak {y in YEARS_WND diff YEAR_ONE, h in HOURS, td in TYPICAL_DAYS}:
+#    sum {i in RESERVE_MARGIN_TECH} F[y, i] >= 
+#        (sum {j in TECHNOLOGIES diff STORAGE_TECH: layers_in_out[y, j, "ELECTRICITY"] < 0}
+#            (-layers_in_out[y, j, "ELECTRICITY"] * F_t[y, j, h, td]) + End_uses [y, "ELECTRICITY", h, td])
+#        * (1 + reserve_margin[y]);
+
+# [Eq. XX.1] Define peak hourly demand
+subject to define_peak_electricity_demand {y in YEARS_WND diff YEAR_ONE, h in HOURS, td in TYPICAL_DAYS}:
+    Peak_demand_electricity[y] >= 
+        sum {j in TECHNOLOGIES diff STORAGE_TECH: layers_in_out[y, j, "ELECTRICITY"] < 0}
+            (-layers_in_out[y, j, "ELECTRICITY"] * F_t[y, j, h, td]) 
+        + End_uses[y, "ELECTRICITY", h, td];
+
+# [Eq. XX.2] Reserve margin requirement for electricity generation
+subject to electricity_reserve_margin_peak {y in YEARS_WND diff YEAR_ONE}:
+    sum {i in RESERVE_MARGIN_TECH} F[y, i] >= 
+        Peak_demand_electricity[y] * (1 + reserve_margin[y]);
+
 
 ## Compute cost during phase:
 #----------------------------
